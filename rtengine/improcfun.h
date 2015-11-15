@@ -48,6 +48,8 @@ PIX_SORT(pp[4],pp[7]); PIX_SORT(pp[4],pp[2]); PIX_SORT(pp[6],pp[4]); \
 PIX_SORT(pp[4],pp[2]); median=pp[4];} //pp4 = median
 
 
+#define rt_MONITOR_RENDERING_INTENT INTENT_PERCEPTUAL
+
 
 namespace rtengine
 {
