@@ -894,6 +894,8 @@ void ImProcCoordinator::freeAll ()
  */
 void ImProcCoordinator::setScale (int prevscale)
 {
+    const int nWH_max = 1500;
+    const int nWH_area_max = nWH_max * nWH_max;
 
     if (settings->verbose) {
         printf ("setscale before lock\n");
@@ -910,7 +912,7 @@ void ImProcCoordinator::setScale (int prevscale)
         prevscale--;
         PreviewProps pp (0, 0, fw, fh, prevscale);
         imgsrc->getSize (tr, pp, nW, nH);
-    } while(nH < 400 && prevscale > 1 && (nW * nH < 1000000) ); // sctually hardcoded values, perhaps a better choice is possible
+    } while(nW < nWH_max && nH < nWH_max && prevscale > 1 && (nW * nH < nWH_area_max) ); // sctually hardcoded values, perhaps a better choice is possible
 
     if (settings->verbose) {
         printf ("setscale starts (%d, %d)\n", nW, nH);
