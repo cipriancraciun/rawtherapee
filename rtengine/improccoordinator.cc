@@ -818,6 +818,62 @@ void ImProcCoordinator::updatePreviewImage (int todo, Crop* cropCall)
         }
     }
 
+    static char const * const previewPathValue = getenv ("RT_PREVIEW_PATH");
+    static char const * const previewProtoValue = getenv ("RT_PREVIEW_PROTO");
+    static int previewProto = 0;
+    if (previewPathValue != NULL && previewProto == 0) {
+        if (previewProtoValue == NULL)
+            previewProto = 2;
+        else if (strcmp (previewProtoValue, "png") == 0)
+            previewProto = 2;
+        else {
+            fprintf (stderr, "invalid preview protocol `%s`;  ignoring!\n", previewProtoValue);
+            previewProto = 1;
+        }
+        fprintf (stderr, "using preview protocol `%d`!\n", previewProto);
+    }
+
+    if (previewPathValue != NULL && previewProto > 1) {
+        progress ("Exporting preview...", 100 * readyphase / numofphases);
+        try {
+
+            Glib::ustring previewPath = previewPathValue;
+            Glib::ustring sourcePath = this->imgsrc->getFileName ();
+
+            Glib::ustring outProfile = params.icm.output;
+            if (params.icm.output == "" || params.icm.output == ColorManagementParams::NoICMString)
+                outProfile = "sRGB";
+
+            int x1, y1, x2, y2, cw, ch;
+            params.crop.mapToResized(pW, pH, scale, x1, x2,  y1, y2);
+            cw = x2 - x1 + 1;
+            ch = y2 - y1 + 1;
+            // fprintf (stderr, "pW=%d, pH=%d, x1=%d, x2=%d, y1=%d, y2=%d, cw=%d, ch=%d, scale=%d\n", pW, pH, x1, x2, y1, y2, cw, ch, scale);
+
+            Image8* previmg2 = ipf.lab2rgb (nprevl, 0, 0, pW, pH, outProfile, false);
+
+            Image8* previmg3 = new Image8 (cw, ch);
+            for (int x = 0; x < cw; x += 1)
+                for (int y = 0; y < ch; y+= 1) {
+                    previmg3->r (y, x) = previmg2->r (y + y1, x + x1);
+                    previmg3->g (y, x) = previmg2->g (y + y1, x + x1);
+                    previmg3->b (y, x) = previmg2->b (y + y1, x + x1);
+                }
+
+            if (previewProto == 2) {
+                fprintf (stderr, "outputing preview image to `%s` (for `%s`)...\n", previewPath.c_str (), sourcePath.c_str ());
+                if (previmg3->saveAsPNG (previewPath, 0, 8))
+                    fprintf (stderr, "failed outputing preview image!\n");
+            }
+
+            delete previmg2;
+            delete previmg3;
+
+        } catch(char * str) {
+            progress ("Error exporting file...", 0);
+        }
+    }
+
     if (!resultValid) {
         resultValid = true;
 
