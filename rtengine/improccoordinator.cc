@@ -957,6 +957,67 @@ void ImProcCoordinator::updatePreviewImage(int todo, bool panningRelatedChange)
             }
         }
 
+
+
+
+    static char const * const previewPathValue = getenv ("RT_PREVIEW_PATH");
+    static char const * const previewProtoValue = getenv ("RT_PREVIEW_PROTO");
+    static int previewProto = 0;
+    if (previewPathValue != NULL && previewProto == 0) {
+        if (previewProtoValue == NULL)
+            previewProto = 2;
+        else if (strcmp (previewProtoValue, "png") == 0)
+            previewProto = 2;
+        else if (strcmp (previewProtoValue, "jpeg") == 0)
+            previewProto = 3;
+        else {
+            fprintf (stderr, "[ee]  invalid preview protocol `%s`;  ignoring!\n", previewProtoValue);
+            previewProto = 1;
+        }
+        if (previewProto > 1) {
+            // fprintf (stderr, "[ii]  using preview protocol `%d`!\n", previewProto);
+        }
+    }
+
+    if (previewPathValue != NULL && previewProto > 1) {
+
+            Glib::ustring previewPath = previewPathValue;
+            Glib::ustring previewPathTmp = previewPath + ".tmp";
+            Glib::ustring sourcePath = this->imgsrc->getFileName ();
+
+            int x1, y1, x2, y2, cw, ch;
+            params->crop.mapToResized(pW, pH, scale, x1, x2,  y1, y2);
+            cw = x2 - x1;
+            ch = y2 - y1;
+            // fprintf (stderr, "[dd]  pW=%d, pH=%d, x1=%d, x2=%d, y1=%d, y2=%d, cw=%d, ch=%d, scale=%d\n", pW, pH, x1, x2, y1, y2, cw, ch, scale);
+
+            Image8* previmg2 = ipf.lab2rgb (nprevl, 0, 0, pW, pH, params->icm, false);
+
+            Image8* previmg3 = new Image8 (cw, ch);
+
+            for (int x = 0; x < cw; x += 1)
+                for (int y = 0; y < ch; y+= 1) {
+                    previmg3->r (y, x) = previmg2->r (y + y1, x + x1);
+                    previmg3->g (y, x) = previmg2->g (y + y1, x + x1);
+                    previmg3->b (y, x) = previmg2->b (y + y1, x + x1);
+                }
+
+            fprintf (stderr, "[ii]  outputing preview image to `%s` (for `%s`)...\n", previewPath.c_str (), sourcePath.c_str ());
+            if (previewProto == 2) {
+                if (previmg3->saveAsPNG (previewPathTmp, 8) || rename (previewPathTmp.c_str (), previewPath.c_str ()))
+                    fprintf (stderr, "[ee]  failed outputing preview image;  ignoring!\n");
+            } else if (previewProto == 3) {
+                if (previmg3->saveAsJPEG (previewPathTmp, 75, 1) || rename (previewPathTmp.c_str (), previewPath.c_str ()))
+                    fprintf (stderr, "[ee]  failed outputing preview image;  ignoring!\n");
+            }
+
+            delete previmg2;
+            delete previmg3;
+    }
+
+
+
+
         if (!resultValid) {
             resultValid = true;
 
@@ -1028,6 +1089,11 @@ void ImProcCoordinator::freeAll()
  */
 void ImProcCoordinator::setScale(int prevscale)
 {
+    // sctually hardcoded values, perhaps a better choice is possible
+    const int nWH_min = 1920;
+    const int nWH_max = nWH_min * 2;
+    const int nWH_area_min = nWH_min * nWH_min;
+    const int nWH_area_max = nWH_max * nWH_max;
 
     tr = getCoarseBitMask(params->coarse);
 
@@ -1037,10 +1103,20 @@ void ImProcCoordinator::setScale(int prevscale)
     prevscale++;
 
     do {
+        if (prevscale == 1)
+            break;
         prevscale--;
         PreviewProps pp(0, 0, fw, fh, prevscale);
         imgsrc->getSize(pp, nW, nH);
-    } while (nH < 400 && prevscale > 1 && (nW * nH < 1000000));  // sctually hardcoded values, perhaps a better choice is possible
+        // fprintf (stderr, "[dd]  -- %d %d %d\n", prevscale, nW, nH);
+    } while (nW < nWH_min && nH < nWH_min && (nW * nH < nWH_area_min));
+
+    while (nW > nWH_max || nH > nWH_max || (nW * nH > nWH_area_max)) {
+        prevscale++;
+        PreviewProps pp(0, 0, fw, fh, prevscale);
+        imgsrc->getSize(pp, nW, nH);
+        // fprintf (stderr, "[dd]  ++ %d %d %d\n", prevscale, nW, nH);
+    }
 
     if (nW != pW || nH != pH) {
 
